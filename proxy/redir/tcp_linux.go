@@ -28,7 +28,11 @@ func parserPacket(conn net.Conn) (socks5.Addr, error) {
 	var addr socks5.Addr
 
 	rc.Control(func(fd uintptr) {
-		addr, err = getorigdst(fd)
+		if len((conn.LocalAddr().(*net.TCPAddr)).IP) == net.IPv4len {
+			addr, err = getorigdst(fd)
+		} else {
+			addr, err = getorigdst6(fd)
+		}
 	})
 
 	return addr, err
@@ -47,5 +51,20 @@ func getorigdst(fd uintptr) (socks5.Addr, error) {
 	copy(addr[1:1+net.IPv4len], raw.Addr[:])
 	port := (*[2]byte)(unsafe.Pointer(&raw.Port)) // big-endian
 	addr[1+net.IPv4len], addr[1+net.IPv4len+1] = port[0], port[1]
+	return addr, nil
+}
+
+func getorigdst6(fd uintptr) (socks5.Addr, error) {
+	raw := syscall.RawSockaddrInet6{}
+	siz := unsafe.Sizeof(raw)
+	if err := socketcall(GETSOCKOPT, fd, syscall.IPPROTO_IPV6, IP6T_SO_ORIGINAL_DST, uintptr(unsafe.Pointer(&raw)), uintptr(unsafe.Pointer(&siz)), 0); err != nil {
+		return nil, err
+	}
+
+	addr := make([]byte, 1+net.IPv6len+2)
+	addr[0] = socks5.AtypIPv6
+	copy(addr[1:1+net.IPv6len], raw.Addr[:])
+	port := (*[2]byte)(unsafe.Pointer(&raw.Port)) // big-endian
+	addr[1+net.IPv6len], addr[1+net.IPv6len+1] = port[0], port[1]
 	return addr, nil
 }
