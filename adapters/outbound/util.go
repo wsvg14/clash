@@ -110,7 +110,7 @@ func dialTimeout(network, address string, timeout time.Duration) (net.Conn, erro
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// if `host` is an ipv4/ipv6 address rather than hostname, we should not start dual stack race
+	// if `host` is an ipv4/ipv6 address rather than a DNS name, we should not start the dual-stack race
 	if net.ParseIP(host) != nil {
 		if strings.Contains(host, ".") {
 			return dialer.DialContext(ctx, "tcp4", address)
