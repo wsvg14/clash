@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/url"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -110,15 +109,6 @@ func dialTimeout(network, address string, timeout time.Duration) (net.Conn, erro
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// if `host` is an ipv4/ipv6 address rather than a DNS name, we should not start the dual-stack race
-	if net.ParseIP(host) != nil {
-		if strings.Contains(host, ".") {
-			return dialer.DialContext(ctx, "tcp4", address)
-		} else {
-			return dialer.DialContext(ctx, "tcp6", address)
-		}
-	}
-
 	returned := make(chan struct{})
 	defer close(returned)
 
@@ -170,7 +160,7 @@ func dialTimeout(network, address string, timeout time.Duration) (net.Conn, erro
 				return res.Conn, nil
 			}
 
-			if res.ipv6 {
+			if !res.ipv6 {
 				primary = res
 			} else {
 				fallback = res
