@@ -3,6 +3,7 @@ package dns
 import (
 	"errors"
 	"net"
+	"strings"
 )
 
 var (
@@ -20,8 +21,8 @@ func ResolveIPv4(host string) (net.IP, error) {
 
 	ip := net.ParseIP(host)
 	if ip != nil {
-		if ip4 := ip.To4(); ip4 != nil {
-			return ip4, nil
+		if !strings.Contains(host, ":") {
+			return ip, nil
 		}
 		return nil, errIPVersion
 	}
@@ -36,8 +37,8 @@ func ResolveIPv4(host string) (net.IP, error) {
 	}
 
 	for _, ip := range ipAddrs {
-		if ip4 := ip.To4(); ip4 != nil {
-			return ip4, nil
+		if len(ip) == net.IPv4len {
+			return ip, nil
 		}
 	}
 
@@ -54,8 +55,8 @@ func ResolveIPv6(host string) (net.IP, error) {
 
 	ip := net.ParseIP(host)
 	if ip != nil {
-		if ip6 := ip.To16(); ip6 != nil {
-			return ip6, nil
+		if strings.Contains(host, ":") {
+			return ip, nil
 		}
 		return nil, errIPVersion
 	}
@@ -70,8 +71,8 @@ func ResolveIPv6(host string) (net.IP, error) {
 	}
 
 	for _, ip := range ipAddrs {
-		if ip6 := ip.To16(); ip6 != nil {
-			return ip6, nil
+		if len(ip) == net.IPv6len {
+			return ip, nil
 		}
 	}
 
