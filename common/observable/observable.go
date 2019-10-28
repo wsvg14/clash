@@ -10,18 +10,18 @@ type Observable struct {
 	listener     *sync.Map
 	done         bool
 	doneLock     sync.RWMutex
-	listenerlock sync.Mutex
+	listenerLock sync.Mutex
 }
 
 func (o *Observable) process() {
 	for item := range o.iterable {
-		o.listenerlock.Lock()
+		o.listenerLock.Lock()
 		o.listener.Range(func(key, value interface{}) bool {
 			elm := value.(*Subscriber)
 			elm.Emit(item)
 			return true
 		})
-		o.listenerlock.Unlock()
+		o.listenerLock.Unlock()
 	}
 	o.close()
 }
@@ -31,13 +31,13 @@ func (o *Observable) close() {
 	o.done = true
 	o.doneLock.Unlock()
 
-	o.listenerlock.Lock()
+	o.listenerLock.Lock()
 	o.listener.Range(func(key, value interface{}) bool {
 		elm := value.(*Subscriber)
 		elm.Close()
 		return true
 	})
-	o.listenerlock.Unlock()
+	o.listenerLock.Unlock()
 }
 
 func (o *Observable) Subscribe() (Subscription, error) {
@@ -48,9 +48,9 @@ func (o *Observable) Subscribe() (Subscription, error) {
 		return nil, errors.New("Observable is closed")
 	}
 	subscriber := newSubscriber()
-	o.listenerlock.Lock()
+	o.listenerLock.Lock()
 	o.listener.Store(subscriber.Out(), subscriber)
-	o.listenerlock.Unlock()
+	o.listenerLock.Unlock()
 	return subscriber.Out(), nil
 }
 
@@ -60,9 +60,9 @@ func (o *Observable) UnSubscribe(sub Subscription) {
 		return
 	}
 	subscriber := elm.(*Subscriber)
-	o.listenerlock.Lock()
+	o.listenerLock.Lock()
 	o.listener.Delete(subscriber.Out())
-	o.listenerlock.Unlock()
+	o.listenerLock.Unlock()
 	subscriber.Close()
 }
 
