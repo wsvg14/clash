@@ -9,6 +9,8 @@ require (
 	github.com/go-chi/cors v1.0.0
 	github.com/go-chi/render v1.0.1
 	github.com/gofrs/uuid v3.2.0+incompatible
+	github.com/google/btree v1.0.0 // indirect
+	github.com/google/netstack v0.0.0-20191031000057-4787376a6744
 	github.com/gorilla/websocket v1.4.1
 	github.com/miekg/dns v1.1.26
 	github.com/oschwald/geoip2-golang v1.4.0
@@ -19,6 +21,7 @@ require (
 	golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20191026070338-33540a1f6037 // indirect
+	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
 	gopkg.in/eapache/channels.v1 v1.1.0
 	gopkg.in/yaml.v2 v2.2.7
 )
