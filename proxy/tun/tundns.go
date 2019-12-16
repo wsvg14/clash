@@ -5,18 +5,17 @@ package tun
 import (
 	"fmt"
 	"net"
-	"time"
 
-	"github.com/Dreamacro/clash/common/pool"
 	"github.com/Dreamacro/clash/dns"
 	"github.com/Dreamacro/clash/log"
 	"github.com/google/netstack/tcpip"
 	"github.com/google/netstack/tcpip/adapters/gonet"
+	"github.com/google/netstack/tcpip/buffer"
+	"github.com/google/netstack/tcpip/header"
 	"github.com/google/netstack/tcpip/network/ipv4"
 	"github.com/google/netstack/tcpip/network/ipv6"
 	"github.com/google/netstack/tcpip/stack"
 	"github.com/google/netstack/tcpip/transport/udp"
-	"github.com/google/netstack/waiter"
 	D "github.com/miekg/dns"
 )
 
@@ -43,48 +42,16 @@ type DNSServer struct {
 
 type dnsEndpoint struct {
 	stack.TransportEndpoint
-	stack        *stack.Stack
-	uniqueID     uint64
-	udpForwarder *udp.Forwarder
-
-	server *dns.Server
+	stack    *stack.Stack
+	uniqueID uint64
+	server   *dns.Server
 }
 
-type connResponseWriter struct {
-	*gonet.Conn
-}
-
-func newDNSEndpoint(s *stack.Stack, server *dns.Server) *dnsEndpoint {
-	ep := &dnsEndpoint{
-		uniqueID: s.UniqueID(),
-		server:   server,
-	}
-	ep.udpForwarder = udp.NewForwarder(s, func(request *udp.ForwarderRequest) {
-		var wq waiter.Queue
-		ep, err := request.CreateEndpoint(&wq)
-		if err != nil {
-			return
-		}
-		conn := gonet.NewConn(&wq, ep)
-		go func() {
-			buffer := pool.BufPool.Get().([]byte)
-			defer pool.BufPool.Put(buffer[:cap(buffer)])
-			defer conn.Close()
-			w := &connResponseWriter{Conn: conn}
-			var msg D.Msg
-			for {
-				conn.SetDeadline(time.Now().Add(defaultTimeout * time.Second))
-				// TODO: handle request larger than MTU
-				n, err := conn.Read(buffer[:])
-				if err != nil {
-					break
-				}
-				msg.Unpack(buffer[:n])
-				go server.ServeDNS(w, &msg)
-			}
-		}()
-	})
-	return ep
+// Keep track of the source of DNS request
+type dnsResponseWriter struct {
+	s  *stack.Stack
+	r  *stack.Route
+	id stack.TransportEndpointID
 }
 
 func (e *dnsEndpoint) UniqueID() uint64 {
@@ -92,7 +59,19 @@ func (e *dnsEndpoint) UniqueID() uint64 {
 }
 
 func (e *dnsEndpoint) HandlePacket(r *stack.Route, id stack.TransportEndpointID, pkt tcpip.PacketBuffer) {
-	e.udpForwarder.HandlePacket(r, id, pkt)
+	hdr := header.UDP(pkt.Data.First())
+	if int(hdr.Length()) > pkt.Data.Size() {
+		// Malformed packet.
+		e.stack.Stats().UDP.MalformedPacketsReceived.Increment()
+		return
+	}
+	pkt.Data.TrimFront(header.UDPMinimumSize)
+
+	// server DNS
+	var msg D.Msg
+	msg.Unpack(pkt.Data.ToView())
+	writer := dnsResponseWriter{s: e.stack, r: r, id: id}
+	go e.server.ServeDNS(&writer, &msg)
 }
 
 func (e *dnsEndpoint) HandleControlPacket(id stack.TransportEndpointID, typ stack.ControlType, extra uint32, pkt tcpip.PacketBuffer) {
@@ -105,7 +84,15 @@ func (e *dnsEndpoint) Wait() {
 
 }
 
-func (w *connResponseWriter) WriteMsg(msg *D.Msg) error {
+func (w *dnsResponseWriter) LocalAddr() net.Addr {
+	return &net.UDPAddr{IP: net.IP(w.id.LocalAddress), Port: int(w.id.LocalPort)}
+}
+
+func (w *dnsResponseWriter) RemoteAddr() net.Addr {
+	return &net.UDPAddr{IP: net.IP(w.id.RemoteAddress), Port: int(w.id.RemotePort)}
+}
+
+func (w *dnsResponseWriter) WriteMsg(msg *D.Msg) error {
 	b, err := msg.Pack()
 	if err != nil {
 		return err
@@ -113,15 +100,64 @@ func (w *connResponseWriter) WriteMsg(msg *D.Msg) error {
 	_, err = w.Write(b)
 	return err
 }
-
-func (w *connResponseWriter) TsigStatus() error {
+func (w *dnsResponseWriter) TsigStatus() error {
+	// Unsupported
 	return nil
 }
-func (w *connResponseWriter) TsigTimersOnly(bool) {
+func (w *dnsResponseWriter) TsigTimersOnly(bool) {
 	// Unsupported
 }
-func (w *connResponseWriter) Hijack() {
+func (w *dnsResponseWriter) Hijack() {
 	// Unsupported
+}
+
+func (w *dnsResponseWriter) Write(b []byte) (int, error) {
+	v := buffer.NewView(len(b))
+	copy(v, b)
+	data := v.ToVectorisedView()
+	ProtocolNumber := udp.ProtocolNumber
+	r := w.r
+
+	// Copy from netstack udp.endpoint.sendUDP
+	// Allocate a buffer for the UDP header.
+	hdr := buffer.NewPrependable(header.UDPMinimumSize + int(r.MaxHeaderLength()))
+
+	// Initialize the header.
+	udp := header.UDP(hdr.Prepend(header.UDPMinimumSize))
+
+	length := uint16(hdr.UsedLength() + data.Size())
+	udp.Encode(&header.UDPFields{
+		SrcPort: w.id.LocalPort,
+		DstPort: w.id.RemotePort,
+		Length:  length,
+	})
+
+	// Only calculate the checksum if offloading isn't supported.
+	if r.Capabilities()&stack.CapabilityTXChecksumOffload == 0 {
+		xsum := r.PseudoHeaderChecksum(ProtocolNumber, length)
+		for _, v := range data.Views() {
+			xsum = header.Checksum(v, xsum)
+		}
+		udp.SetChecksum(^udp.CalculateChecksum(xsum))
+	}
+
+	ttl := r.DefaultTTL()
+
+	if err := r.WritePacket(nil /* gso */, stack.NetworkHeaderParams{Protocol: ProtocolNumber, TTL: ttl, TOS: 0 /* default */}, tcpip.PacketBuffer{
+		Header: hdr,
+		Data:   data,
+	}); err != nil {
+		r.Stats().UDP.PacketSendErrors.Increment()
+		return 0, fmt.Errorf("%v", err)
+	}
+
+	// Track count of packets sent.
+	r.Stats().UDP.PacketsSent.Increment()
+	return len(b), nil
+}
+
+func (w *dnsResponseWriter) Close() error {
+	return nil
 }
 
 // CreateDNSServer create a dns server on given netstack
@@ -134,9 +170,12 @@ func CreateDNSServer(s *stack.Stack, resolver *dns.Resolver, ip net.IP, port int
 	if ip.To4() != nil {
 		v4 = true
 		address.Addr = tcpip.Address(ip.To4())
+		// netstack will only reassemble IP fragments when its' dest ip address is registered in NIC.endpoints
+		s.AddAddress(nicID, ipv4.ProtocolNumber, address.Addr)
 	} else {
-		address.Addr = tcpip.Address(ip.To16())
 		v4 = false
+		address.Addr = tcpip.Address(ip.To16())
+		s.AddAddress(nicID, ipv6.ProtocolNumber, address.Addr)
 	}
 	if address.Addr == ipv4Zero || address.Addr == ipv6Zero {
 		address.Addr = ""
@@ -147,14 +186,19 @@ func CreateDNSServer(s *stack.Stack, resolver *dns.Resolver, ip net.IP, port int
 	serverIn.SetHandler(handler)
 
 	// UDP DNS
-
 	id := &stack.TransportEndpointID{
 		LocalAddress:  address.Addr,
 		LocalPort:     uint16(port),
 		RemotePort:    0,
 		RemoteAddress: "",
 	}
-	endpoint := newDNSEndpoint(s, serverIn)
+
+	// TransportEndpoint for DNS
+	endpoint := &dnsEndpoint{
+		stack:    s,
+		uniqueID: s.UniqueID(),
+		server:   serverIn,
+	}
 
 	if tcpiperr := s.RegisterTransportEndpoint(1,
 		[]tcpip.NetworkProtocolNumber{
@@ -208,7 +252,7 @@ func (s *DNSServer) Stop() {
 		s.Listener.Close()
 	}
 	// remove udp endpoint from stack
-	s.stack.UnregisterTransportEndpoint(1,
+	s.stack.UnregisterTransportEndpoint(s.NICID,
 		[]tcpip.NetworkProtocolNumber{
 			ipv4.ProtocolNumber,
 			ipv6.ProtocolNumber,
