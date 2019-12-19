@@ -82,7 +82,9 @@ func NewTunProxy(deviceURL string) (TunAdapter, error) {
 	ipstack.AddAddressRange(1, ipv4.ProtocolNumber, subnet)
 
 	// TCP handler
-	tcpFwd := tcp.NewForwarder(ipstack, 0, 16, func(r *tcp.ForwarderRequest) {
+	// maximum number of half-open tcp connection set to 1024
+	// receive buffer size set to 64k
+	tcpFwd := tcp.NewForwarder(ipstack, 65536, 1024, func(r *tcp.ForwarderRequest) {
 		var wq waiter.Queue
 		ep, err := r.CreateEndpoint(&wq)
 		if err != nil {
