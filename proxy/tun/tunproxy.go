@@ -83,8 +83,8 @@ func NewTunProxy(deviceURL string) (TunAdapter, error) {
 
 	// TCP handler
 	// maximum number of half-open tcp connection set to 1024
-	// receive buffer size set to 64k
-	tcpFwd := tcp.NewForwarder(ipstack, 65536, 1024, func(r *tcp.ForwarderRequest) {
+	// receive buffer size set to 20k
+	tcpFwd := tcp.NewForwarder(ipstack, 20*1024, 1024, func(r *tcp.ForwarderRequest) {
 		var wq waiter.Queue
 		ep, err := r.CreateEndpoint(&wq)
 		if err != nil {
