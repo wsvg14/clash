@@ -1,7 +1,6 @@
 package socks
 
 import (
-	"bytes"
 	"net"
 
 	"github.com/Dreamacro/clash/common/pool"
@@ -12,23 +11,31 @@ type fakeConn struct {
 	net.PacketConn
 	remoteAddr net.Addr
 	targetAddr socks5.Addr
-	buffer     *bytes.Buffer
+	payload    []byte
 	bufRef     []byte
 }
 
-func (c *fakeConn) Read(b []byte) (n int, err error) {
-	return c.buffer.Read(b)
+func (c *fakeConn) Data() []byte {
+	return c.payload
 }
 
-func (c *fakeConn) Write(b []byte) (n int, err error) {
-	packet, err := socks5.EncodeUDPPacket(c.targetAddr, b)
+// Wirte UDP packet with source(ip, port) = `addr`
+func (c *fakeConn) WriteFrom(b []byte, addr net.Addr) (n int, err error) {
+	var from socks5.Addr
+	if addr == nil {
+		// if addr is not provided, use the original source
+		from = c.targetAddr
+	} else {
+		from = socks5.ParseAddrFromNetAddr(addr)
+	}
+	packet, err := socks5.EncodeUDPPacket(from, b)
 	if err != nil {
 		return
 	}
 	return c.PacketConn.WriteTo(packet, c.remoteAddr)
 }
 
-func (c *fakeConn) RemoteAddr() net.Addr {
+func (c *fakeConn) SourceAddr() net.Addr {
 	return c.remoteAddr
 }
 

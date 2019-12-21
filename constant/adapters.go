@@ -109,3 +109,20 @@ func (at AdapterType) String() string {
 		return "Unknown"
 	}
 }
+
+// UDPPacket contains the data of UDP packet, and offers control/info of UDP packet's source
+type UDPPacket interface {
+	// Data get the payload of UDP Packet
+	Data() []byte
+
+	// WriteFrom writes the payload with source IP/Port equals addr
+	// variable source IP/Port is import to STUN
+	// if addr is not provided, WriteFrom will wirte out UDP packet with SourceIP/Prot equals
+	WriteFrom(b []byte, addr net.Addr) (n int, err error)
+
+	// Close closes the underlaying connection.
+	Close() error
+
+	// SourceAddr returns the source IP/Port of packet
+	SourceAddr() net.Addr
+}

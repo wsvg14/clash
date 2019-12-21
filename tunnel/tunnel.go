@@ -43,12 +43,12 @@ type Tunnel struct {
 
 // Add request to queue
 func (t *Tunnel) Add(req C.ServerAdapter) {
-	switch req.Metadata().NetWork {
-	case C.TCP:
-		t.tcpQueue.In() <- req
-	case C.UDP:
-		t.udpQueue.In() <- req
-	}
+	t.tcpQueue.In() <- req
+}
+
+// AddPacket add udp Packet to queue
+func (t *Tunnel) AddPacket(packet *inbound.PacketAdapter) {
+	t.udpQueue.In() <- packet
 }
 
 // Rules return all rules
@@ -102,7 +102,7 @@ func (t *Tunnel) process() {
 	go func() {
 		queue := t.udpQueue.Out()
 		for elm := range queue {
-			conn := elm.(C.ServerAdapter)
+			conn := elm.(*inbound.PacketAdapter)
 			t.handleUDPConn(conn)
 		}
 	}()
@@ -158,20 +158,20 @@ func (t *Tunnel) resolveMetadata(metadata *C.Metadata) (C.Proxy, C.Rule, error) 
 	return proxy, rule, nil
 }
 
-func (t *Tunnel) handleUDPConn(localConn C.ServerAdapter) {
-	metadata := localConn.Metadata()
+func (t *Tunnel) handleUDPConn(packet *inbound.PacketAdapter) {
+	metadata := packet.Metadata()
 	if !metadata.Valid() {
 		log.Warnln("[Metadata] not valid: %#v", metadata)
 		return
 	}
 
-	src := localConn.RemoteAddr().String()
+	src := packet.SourceAddr().String()
 	dst := metadata.RemoteAddress()
 	key := src + "-" + dst
 
 	pc, addr := t.natTable.Get(key)
 	if pc != nil {
-		t.handleUDPToRemote(localConn, pc, addr)
+		t.handleUDPToRemote(packet, pc, addr)
 		return
 	}
 
@@ -207,13 +207,13 @@ func (t *Tunnel) handleUDPConn(localConn C.ServerAdapter) {
 			t.natTable.Set(key, pc, addr)
 			t.natTable.Delete(lockKey)
 			wg.Done()
-			go t.handleUDPToLocal(localConn, pc, key, udpTimeout)
+			go t.handleUDPToLocal(packet.UDPPacket, pc, key, udpTimeout)
 		}
 
 		wg.Wait()
 		pc, addr := t.natTable.Get(key)
 		if pc != nil {
-			t.handleUDPToRemote(localConn, pc, addr)
+			t.handleUDPToRemote(packet, pc, addr)
 		}
 	}()
 }
