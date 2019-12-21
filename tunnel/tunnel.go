@@ -3,7 +3,9 @@ package tunnel
 import (
 	"fmt"
 	"net"
+	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Dreamacro/clash/adapters/inbound"
@@ -39,6 +41,11 @@ type Tunnel struct {
 
 	// Outbound Rule
 	mode Mode
+
+	// number of current udp Worker
+	// use int32 to prevent atomic.AddInt64 alignment issue on 32bit platform
+	// See https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	udpWorker int32
 }
 
 // Add request to queue
@@ -98,14 +105,28 @@ func (t *Tunnel) SetMode(mode Mode) {
 	t.mode = mode
 }
 
-func (t *Tunnel) process() {
-	go func() {
-		queue := t.udpQueue.Out()
-		for elm := range queue {
-			conn := elm.(*inbound.PacketAdapter)
-			t.handleUDPConn(conn)
+// processUDP start a loop to handle udp packet
+// if there are too many packet in the queue, start more workers
+func (t *Tunnel) processUDP(mainWorker bool) {
+	if !mainWorker {
+		log.Debugln("start No.%d processUDP goroutine due to heavy load.", t.udpWorker)
+	}
+	queue := t.udpQueue.Out()
+	for elm := range queue {
+		conn := elm.(*inbound.PacketAdapter)
+		t.handleUDPConn(conn)
+		// Auto Scaling
+		if mainWorker && t.udpQueue.Len() > 5000+1000*int(t.udpWorker) && int(t.udpWorker) < runtime.NumCPU() {
+			atomic.AddInt32(&t.udpWorker, 1)
+			go t.processUDP(false)
 		}
-	}()
+	}
+	atomic.AddInt32(&t.udpWorker, -1)
+}
+
+func (t *Tunnel) process() {
+	t.udpWorker = 1
+	go t.processUDP(true)
 
 	queue := t.tcpQueue.Out()
 	for elm := range queue {
