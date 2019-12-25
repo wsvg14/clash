@@ -11,7 +11,7 @@ type PacketAdapter struct {
 	metadata *C.Metadata
 }
 
-// Metadata return destination metadata
+// Metadata returns destination metadata
 func (s *PacketAdapter) Metadata() *C.Metadata {
 	return s.metadata
 }

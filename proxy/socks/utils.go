@@ -19,7 +19,7 @@ func (c *fakeConn) Data() []byte {
 	return c.payload
 }
 
-// Wirte UDP packet with source(ip, port) = `addr`
+// WriteFrom wirtes UDP packet with source(ip, port) = `addr`
 func (c *fakeConn) WriteFrom(b []byte, addr net.Addr) (n int, err error) {
 	var from socks5.Addr
 	if addr == nil {

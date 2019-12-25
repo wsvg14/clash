@@ -99,7 +99,7 @@ func (t *Tunnel) SetMode(mode Mode) {
 	t.mode = mode
 }
 
-// processUDP start a loop to handle udp packet
+// processUDP starts a loop to handle udp packet
 func (t *Tunnel) processUDP() {
 	queue := t.udpQueue.Out()
 	for elm := range queue {

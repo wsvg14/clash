@@ -63,7 +63,7 @@ func (a Addr) String() string {
 	return net.JoinHostPort(host, port)
 }
 
-// ToUDPAddr convert a socks5.Addr to *net.UDPAddr
+// ToUDPAddr converts a socks5.Addr to *net.UDPAddr
 func (a Addr) ToUDPAddr() *net.UDPAddr {
 	if len(a) == 0 {
 		return nil

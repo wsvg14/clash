@@ -60,7 +60,7 @@ func (p *Pool) LookBack(ip net.IP) (string, bool) {
 	return "", false
 }
 
-// Exist return if given ip exists in fake-ip pool
+// Exist returns if given ip exists in fake-ip pool
 func (p *Pool) Exist(ip net.IP) bool {
 	p.mux.Lock()
 	defer p.mux.Unlock()
