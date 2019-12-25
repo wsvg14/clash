@@ -35,7 +35,8 @@ func (c *fakeConn) WriteFrom(b []byte, addr net.Addr) (n int, err error) {
 	return c.PacketConn.WriteTo(packet, c.remoteAddr)
 }
 
-func (c *fakeConn) SourceAddr() net.Addr {
+// LocalAddr returns the source IP/Port of UDP Packet
+func (c *fakeConn) LocalAddr() net.Addr {
 	return c.remoteAddr
 }
 

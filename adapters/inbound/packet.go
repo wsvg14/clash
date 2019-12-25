@@ -21,7 +21,7 @@ func NewPacket(target socks5.Addr, packet C.UDPPacket, source C.Type, netType C.
 	metadata := parseSocksAddr(target)
 	metadata.NetWork = netType
 	metadata.Type = source
-	if ip, port, err := parseAddr(packet.SourceAddr().String()); err == nil {
+	if ip, port, err := parseAddr(packet.LocalAddr().String()); err == nil {
 		metadata.SrcIP = ip
 		metadata.SrcPort = port
 	}

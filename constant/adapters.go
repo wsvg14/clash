@@ -123,6 +123,6 @@ type UDPPacket interface {
 	// Close closes the underlaying connection.
 	Close() error
 
-	// SourceAddr returns the source IP/Port of packet
-	SourceAddr() net.Addr
+	// LocalAddr returns the source IP/Port of packet
+	LocalAddr() net.Addr
 }
