@@ -60,6 +60,20 @@ func (p *Pool) LookBack(ip net.IP) (string, bool) {
 	return "", false
 }
 
+// Exist return if given ip exists in fake-ip pool
+func (p *Pool) Exist(ip net.IP) bool {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+
+	if ip = ip.To4(); ip == nil {
+		return false
+	}
+
+	n := ipToUint(ip.To4())
+	offset := n - p.min + 1
+	return p.cache.Exist(offset)
+}
+
 // Gateway return gateway ip
 func (p *Pool) Gateway() net.IP {
 	return uintToIP(p.gateway)

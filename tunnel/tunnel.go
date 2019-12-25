@@ -129,7 +129,7 @@ func (t *Tunnel) resolveIP(host string) (net.IP, error) {
 }
 
 func (t *Tunnel) needLookupIP(metadata *C.Metadata) bool {
-	return dns.DefaultResolver != nil && (dns.DefaultResolver.IsMapping() || dns.DefaultResolver.IsFakeIP()) && metadata.Host == "" && metadata.DstIP != nil
+	return dns.DefaultResolver != nil && (dns.DefaultResolver.IsMapping() || dns.DefaultResolver.FakeIPEnabled()) && metadata.Host == "" && metadata.DstIP != nil
 }
 
 func (t *Tunnel) resolveMetadata(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
@@ -144,7 +144,7 @@ func (t *Tunnel) resolveMetadata(metadata *C.Metadata) (C.Proxy, C.Rule, error) 
 		if exist {
 			metadata.Host = host
 			metadata.AddrType = C.AtypDomainName
-			if dns.DefaultResolver.IsFakeIP() {
+			if dns.DefaultResolver.FakeIPEnabled() {
 				metadata.DstIP = nil
 			}
 		}
@@ -187,6 +187,9 @@ func (t *Tunnel) handleUDPConn(packet *inbound.PacketAdapter) {
 
 	lockKey := key + "-lock"
 	wg, loaded := t.natTable.GetOrCreateLock(lockKey)
+
+	isFakeIP := dns.DefaultResolver.IsFakeIP(metadata.DstIP)
+
 	go func() {
 		if !loaded {
 			wg.Add(1)
@@ -217,7 +220,8 @@ func (t *Tunnel) handleUDPConn(packet *inbound.PacketAdapter) {
 			t.natTable.Set(key, pc, addr)
 			t.natTable.Delete(lockKey)
 			wg.Done()
-			go t.handleUDPToLocal(packet.UDPPacket, pc, key, udpTimeout)
+			// in fake-ip mode, Full-Cone NAT can never achieve, fallback to omitting src Addr
+			go t.handleUDPToLocal(packet.UDPPacket, pc, key, isFakeIP, udpTimeout)
 		}
 
 		wg.Wait()
