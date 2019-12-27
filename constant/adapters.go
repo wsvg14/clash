@@ -115,11 +115,11 @@ type UDPPacket interface {
 	// Data get the payload of UDP Packet
 	Data() []byte
 
-	// WriteFrom writes the payload with source IP/Port equals addr
+	// WriteBack writes the payload with source IP/Port equals addr
 	// - variable source IP/Port is important to STUN
-	// - if addr is not provided, WriteFrom will wirte out UDP packet with SourceIP/Prot equals to origional Target,
+	// - if addr is not provided, WriteBack will wirte out UDP packet with SourceIP/Prot equals to origional Target,
 	//   this is important when using Fake-IP.
-	WriteFrom(b []byte, addr net.Addr) (n int, err error)
+	WriteBack(b []byte, addr net.Addr) (n int, err error)
 
 	// Close closes the underlaying connection.
 	Close() error

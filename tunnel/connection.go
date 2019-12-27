@@ -104,7 +104,7 @@ func (t *Tunnel) handleUDPToLocal(packet C.UDPPacket, pc net.PacketConn, key str
 			from = nil
 		}
 
-		n, err = packet.WriteFrom(buf[:n], from)
+		n, err = packet.WriteBack(buf[:n], from)
 		if err != nil {
 			return
 		}
