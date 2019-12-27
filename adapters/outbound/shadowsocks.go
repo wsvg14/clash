@@ -206,7 +206,7 @@ func (uc *ssUDPConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	var from net.Addr
 	if e == nil {
 		// Get the source IP/Port of packet.
-		from = addr.ToUDPAddr()
+		from = addr.UDPAddr()
 	}
 	copy(b, b[len(addr):])
 	return n - len(addr), from, e
