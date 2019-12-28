@@ -89,6 +89,7 @@ func NewTunProxy(deviceURL string) (TunAdapter, error) {
 		ep, err := r.CreateEndpoint(&wq)
 		if err != nil {
 			log.Warnln("Can't create TCP Endpoint in ipstack: %v", err)
+			r.Complete(true)
 			return
 		}
 		r.Complete(false)
