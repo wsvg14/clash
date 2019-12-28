@@ -62,12 +62,12 @@ func (p *Pool) LookBack(ip net.IP) (string, bool) {
 	return "", false
 }
 
-// LookupHost return if host in host
-func (p *Pool) LookupHost(host string) bool {
+// LookupHost return if domain in host
+func (p *Pool) LookupHost(domain string) bool {
 	if p.host == nil {
 		return false
 	}
-	return p.host.Search(host) != nil
+	return p.host.Search(domain) != nil
 }
 
 // Exist returns if given ip exists in fake-ip pool
