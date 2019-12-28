@@ -1,7 +1,6 @@
 package tun
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 
@@ -13,27 +12,34 @@ import (
 )
 
 type fakeConn struct {
-	net.Conn
-	id     stack.TransportEndpointID
-	r      *stack.Route
-	buffer *bytes.Buffer
+	id      stack.TransportEndpointID
+	r       *stack.Route
+	payload []byte
 }
 
-func (c *fakeConn) Read(b []byte) (n int, err error) {
-	return c.buffer.Read(b)
+func (c *fakeConn) Data() []byte {
+	return c.payload
 }
 
-func (c *fakeConn) Write(b []byte) (n int, err error) {
+func (c *fakeConn) WriteBack(b []byte, addr net.Addr) (n int, err error) {
 	v := buffer.View(b)
 	data := v.ToVectorisedView()
-	return writeUDP(c.r, data, c.id.LocalPort, c.id.RemotePort)
+	// if addr is not provided, write back use original dst Addr as src Addr
+	if addr == nil {
+		return writeUDP(c.r, data, uint16(c.id.LocalPort), c.id.RemotePort)
+	}
+
+	udpaddr, _ := addr.(*net.UDPAddr)
+	r := c.r.Clone()
+	if ipv4 := udpaddr.IP.To4(); ipv4 != nil {
+		r.LocalAddress = tcpip.Address(ipv4)
+	} else {
+		r.LocalAddress = tcpip.Address(udpaddr.IP)
+	}
+	return writeUDP(&r, data, uint16(udpaddr.Port), c.id.RemotePort)
 }
 
 func (c *fakeConn) LocalAddr() net.Addr {
-	return &net.UDPAddr{IP: net.IP(c.id.LocalAddress), Port: int(c.id.LocalPort)}
-}
-
-func (c *fakeConn) RemoteAddr() net.Addr {
 	return &net.UDPAddr{IP: net.IP(c.id.RemoteAddress), Port: int(c.id.RemotePort)}
 }
 

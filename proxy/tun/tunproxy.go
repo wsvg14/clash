@@ -1,7 +1,6 @@
 package tun
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"net/url"
@@ -135,12 +134,12 @@ func (t *tunAdapter) udpHandlePacket(r *stack.Route, id stack.TransportEndpointI
 
 	target := getAddr(id)
 
-	conn := &fakeConn{
-		id:     id,
-		r:      r,
-		buffer: bytes.NewBuffer(pkt.Data.ToView()),
+	packet := &fakeConn{
+		id:      id,
+		r:       r,
+		payload: pkt.Data.ToView(),
 	}
-	tun.Add(adapters.NewSocket(target, conn, C.SOCKS, C.UDP))
+	tun.AddPacket(adapters.NewPacket(target, packet, C.SOCKS, C.UDP))
 
 	return true
 }
