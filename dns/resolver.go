@@ -192,7 +192,7 @@ func (r *Resolver) batchExchange(clients []resolver, m *D.Msg) (msg *D.Msg, err 
 		})
 	}
 
-	elm := fast.Wait()
+	elm := fast.WaitWithoutCancel()
 	if elm == nil {
 		return nil, errors.New("All DNS requests failed")
 	}
