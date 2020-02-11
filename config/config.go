@@ -138,7 +138,7 @@ func Parse(buf []byte) (*Config, error) {
 		return nil, err
 	}
 
-	return ParseRawConfig(rawCfg)
+	return ParseRawConfig(rawCfg, C.Path.HomeDir())
 }
 
 func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
@@ -187,7 +187,7 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	return rawCfg, nil
 }
 
-func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
+func ParseRawConfig(rawCfg *RawConfig, baseDir string) (*Config, error) {
 	config := &Config{}
 
 	config.Experimental = &rawCfg.Experimental
@@ -198,7 +198,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.General = general
 
-	proxies, providers, err := parseProxies(rawCfg)
+	proxies, providers, err := parseProxies(rawCfg, baseDir)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +265,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 	return general, nil
 }
 
-func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[string]provider.ProxyProvider, err error) {
+func parseProxies(cfg *RawConfig, baseDir string) (proxies map[string]C.Proxy, providersMap map[string]provider.ProxyProvider, err error) {
 	proxies = make(map[string]C.Proxy)
 	providersMap = make(map[string]provider.ProxyProvider)
 	proxyList := []string{}
@@ -332,7 +332,7 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 			return nil, nil, fmt.Errorf("can not defined a provider called `%s`", provider.ReservedName)
 		}
 
-		pd, err := provider.ParseProxyProvider(name, mapping)
+		pd, err := provider.ParseProxyProvider(name, mapping, baseDir)
 		if err != nil {
 			return nil, nil, err
 		}
