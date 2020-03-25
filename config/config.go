@@ -39,6 +39,7 @@ type Inbound struct {
 	SocksPort      int      `json:"socks-port"`
 	RedirPort      int      `json:"redir-port"`
 	MixedPort      int      `json:"mixed-port"`
+	Tun            Tun      `json:"tun"`
 	Authentication []string `json:"authentication"`
 	AllowLan       bool     `json:"allow-lan"`
 	BindAddress    string   `json:"bind-address"`
@@ -70,12 +71,19 @@ type FallbackFilter struct {
 	IPCIDR []*net.IPNet `yaml:"ipcidr"`
 }
 
+// Tun config
+type Tun struct {
+	Enable      bool   `yaml:"enable" json:"enable"`
+	LinuxIfName string `yaml:"linux-if-name" json:"linux-if-name"`
+}
+
 // Experimental config
 type Experimental struct{}
 
 // Config is clash config manager
 type Config struct {
 	General      *General
+	Tun          *Tun
 	DNS          *DNS
 	Experimental *Experimental
 	Hosts        *trie.DomainTrie
@@ -122,6 +130,7 @@ type RawConfig struct {
 	ProxyProvider map[string]map[string]interface{} `yaml:"proxy-providers"`
 	Hosts         map[string]string                 `yaml:"hosts"`
 	DNS           RawDNS                            `yaml:"dns"`
+	Tun           Tun                               `yaml:"tun"`
 	Experimental  Experimental                      `yaml:"experimental"`
 	Proxy         []map[string]interface{}          `yaml:"proxies"`
 	ProxyGroup    []map[string]interface{}          `yaml:"proxy-groups"`
@@ -150,6 +159,10 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 		Rule:           []string{},
 		Proxy:          []map[string]interface{}{},
 		ProxyGroup:     []map[string]interface{}{},
+		Tun: Tun{
+			Enable:      false,
+			LinuxIfName: "clash0",
+		},
 		DNS: RawDNS{
 			Enable:      false,
 			FakeIPRange: "198.18.0.1/16",
@@ -230,6 +243,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			SocksPort:   cfg.SocksPort,
 			RedirPort:   cfg.RedirPort,
 			MixedPort:   cfg.MixedPort,
+			Tun:         cfg.Tun,
 			AllowLan:    cfg.AllowLan,
 			BindAddress: cfg.BindAddress,
 		},
