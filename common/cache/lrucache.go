@@ -97,6 +97,25 @@ func (c *LruCache) Get(key interface{}) (interface{}, bool) {
 	return value, true
 }
 
+// GetWithExpire returns the interface{} representation of a cached response,
+// a int64 give the expected expires timestamp in seconds
+// and  a bool set to true if the key was found.
+// This method will NOT check the maxAge of element and will NOT update the expires.
+func (c *LruCache) GetWithExpire(key interface{}) (interface{}, int64, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	le, ok := c.cache[key]
+	if !ok {
+		return nil, 0, false
+	}
+
+	c.lru.MoveToBack(le)
+	entry := le.Value.(*entry)
+
+	return entry.value, entry.expires, true
+}
+
 // Exist returns if key exist in cache but not put item to the head of linked list
 func (c *LruCache) Exist(key interface{}) bool {
 	c.mu.Lock()
@@ -108,13 +127,17 @@ func (c *LruCache) Exist(key interface{}) bool {
 
 // Set stores the interface{} representation of a response for a given key.
 func (c *LruCache) Set(key interface{}, value interface{}) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	expires := int64(0)
 	if c.maxAge > 0 {
 		expires = time.Now().Unix() + c.maxAge
 	}
+	c.SetWithExpire(key, value, expires)
+}
+
+// SetWithExpire stores the interface{} representation of a response for a given key and given exires.
+func (c *LruCache) SetWithExpire(key interface{}, value interface{}, expires int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	if le, ok := c.cache[key]; ok {
 		c.lru.MoveToBack(le)

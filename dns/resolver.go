@@ -42,7 +42,7 @@ type Resolver struct {
 	fallback        []dnsClient
 	fallbackFilters []fallbackFilter
 	group           singleflight.Group
-	cache           *cache.Cache
+	lruCache        *cache.LruCache
 }
 
 // ResolveIP request with TypeA and TypeAAAA, priority return TypeA
@@ -96,22 +96,38 @@ func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 	}
 
 	q := m.Question[0]
-	cache, expireTime := r.cache.GetWithExpire(q.String())
-	if cache != nil {
+	cache, expireTime, hit := r.lruCache.GetWithExpire(q.String())
+	expiredMsg := false
+
+	if hit {
+		expiredMsg = expireTime < time.Now().Unix()
 		msg = cache.(*D.Msg).Copy()
-		setMsgTTL(msg, uint32(expireTime.Sub(time.Now()).Seconds()))
+		if expiredMsg {
+			setMsgTTL(msg, uint32(1)) // Continue fetch
+			go r.exchangeWithoutCache(m)
+		} else {
+			setMsgTTL(msg, uint32(expireTime-time.Now().Unix()))
+		}
 		return
 	}
+	return r.exchangeWithoutCache(m)
+
+}
+
+// ExchangeWithoutCache a batch of dns request, and it do NOT GET from cache
+func (r *Resolver) exchangeWithoutCache(m *D.Msg) (msg *D.Msg, err error) {
+	q := m.Question[0]
+
 	defer func() {
 		if msg == nil {
 			return
 		}
 
-		putMsgToCache(r.cache, q.String(), msg)
+		putMsgToCache(r.lruCache, q.String(), msg)
 		if r.mapping {
 			ips := r.msgToIP(msg)
 			for _, ip := range ips {
-				putMsgToCache(r.cache, ip.String(), msg)
+				putMsgToCache(r.lruCache, ip.String(), msg)
 			}
 		}
 	}()
@@ -141,7 +157,7 @@ func (r *Resolver) IPToHost(ip net.IP) (string, bool) {
 		return r.pool.LookBack(ip)
 	}
 
-	cache := r.cache.Get(ip.String())
+	cache, _ := r.lruCache.Get(ip.String())
 	if cache == nil {
 		return "", false
 	}
@@ -294,17 +310,17 @@ type Config struct {
 
 func New(config Config) *Resolver {
 	defaultResolver := &Resolver{
-		main:  transform(config.Default, nil),
-		cache: cache.New(time.Second * 60),
+		main:     transform(config.Default, nil),
+		lruCache: cache.NewLRUCache(cache.WithSize(4096)),
 	}
 
 	r := &Resolver{
-		ipv6:    config.IPv6,
-		main:    transform(config.Main, defaultResolver),
-		cache:   cache.New(time.Second * 60),
-		mapping: config.EnhancedMode == MAPPING,
-		fakeip:  config.EnhancedMode == FAKEIP,
-		pool:    config.Pool,
+		ipv6:     config.IPv6,
+		main:     transform(config.Main, defaultResolver),
+		lruCache: cache.NewLRUCache(cache.WithSize(4096)),
+		mapping:  config.EnhancedMode == MAPPING,
+		fakeip:   config.EnhancedMode == FAKEIP,
+		pool:     config.Pool,
 	}
 
 	if len(config.Fallback) != 0 {
