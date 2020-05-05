@@ -97,16 +97,14 @@ func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 
 	q := m.Question[0]
 	cache, expireTime, hit := r.lruCache.GetWithExpire(q.String())
-	expiredMsg := false
-
 	if hit {
-		expiredMsg = expireTime < time.Now().Unix()
+		now := time.Now()
 		msg = cache.(*D.Msg).Copy()
-		if expiredMsg {
+		if expireTime.Before(now) {
 			setMsgTTL(msg, uint32(1)) // Continue fetch
 			go r.exchangeWithoutCache(m)
 		} else {
-			setMsgTTL(msg, uint32(expireTime-time.Now().Unix()))
+			setMsgTTL(msg, uint32(expireTime.Sub(time.Now()).Seconds()))
 		}
 		return
 	}
@@ -311,13 +309,13 @@ type Config struct {
 func New(config Config) *Resolver {
 	defaultResolver := &Resolver{
 		main:     transform(config.Default, nil),
-		lruCache: cache.NewLRUCache(cache.WithSize(4096)),
+		lruCache: cache.NewLRUCache(cache.WithSize(4096), cache.WithStale(true)),
 	}
 
 	r := &Resolver{
 		ipv6:     config.IPv6,
 		main:     transform(config.Main, defaultResolver),
-		lruCache: cache.NewLRUCache(cache.WithSize(4096)),
+		lruCache: cache.NewLRUCache(cache.WithSize(4096), cache.WithStale(true)),
 		mapping:  config.EnhancedMode == MAPPING,
 		fakeip:   config.EnhancedMode == FAKEIP,
 		pool:     config.Pool,

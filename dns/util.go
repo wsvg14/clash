@@ -93,7 +93,7 @@ func putMsgToCache(c *cache.LruCache, key string, msg *D.Msg) {
 		return
 	}
 
-	c.SetWithExpire(key, msg.Copy(), time.Now().Unix()+int64(ttl))
+	c.SetWithExpire(key, msg.Copy(), time.Now().Add(time.Second*time.Duration(ttl)))
 }
 
 func setMsgTTL(msg *D.Msg, ttl uint32) {
