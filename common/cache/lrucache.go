@@ -43,6 +43,7 @@ func WithSize(maxSize int) Option {
 }
 
 // WithStale decide whether Stale return is enabled.
+// If this feature is enabled, element will not get Evicted according to `WithAge`.
 func WithStale(stale bool) Option {
 	return func(l *LruCache) {
 		l.staleReturn = stale
@@ -96,7 +97,7 @@ func (c *LruCache) Get(key interface{}) (interface{}, bool) {
 func (c *LruCache) GetWithExpire(key interface{}) (interface{}, time.Time, bool) {
 	entry := c.get(key)
 	if entry == nil {
-		return nil, time.Unix(0, 0), false
+		return nil, time.Time{}, false
 	}
 
 	return entry.value, time.Unix(entry.expires, 0), true
@@ -180,7 +181,7 @@ func (c *LruCache) Delete(key string) {
 }
 
 func (c *LruCache) maybeDeleteOldest() {
-	if c.maxAge > 0 {
+	if !c.staleReturn && c.maxAge > 0 {
 		now := time.Now().Unix()
 		for le := c.lru.Front(); le != nil && le.Value.(*entry).expires <= now; le = c.lru.Front() {
 			c.deleteElement(le)
