@@ -91,8 +91,8 @@ func (c *LruCache) Get(key interface{}) (interface{}, bool) {
 }
 
 // GetWithExpire returns the interface{} representation of a cached response,
-// a int64 give the expected expires timestamp in seconds
-// and  a bool set to true if the key was found.
+// a time.Time Give expected expires,
+// and a bool set to true if the key was found.
 // This method will NOT check the maxAge of element and will NOT update the expires.
 func (c *LruCache) GetWithExpire(key interface{}) (interface{}, time.Time, bool) {
 	entry := c.get(key)
@@ -122,6 +122,7 @@ func (c *LruCache) Set(key interface{}, value interface{}) {
 }
 
 // SetWithExpire stores the interface{} representation of a response for a given key and given exires.
+// The expires time will round to second.
 func (c *LruCache) SetWithExpire(key interface{}, value interface{}, expires time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

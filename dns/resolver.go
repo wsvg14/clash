@@ -109,7 +109,6 @@ func (r *Resolver) Exchange(m *D.Msg) (msg *D.Msg, err error) {
 		return
 	}
 	return r.exchangeWithoutCache(m)
-
 }
 
 // ExchangeWithoutCache a batch of dns request, and it do NOT GET from cache
